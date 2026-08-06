@@ -93,19 +93,17 @@ The `nousresearch/hermes-agent` image already ships ~90 public skills â€” nothin
 
 Browse the full set in the dashboard, or have the agent run its skill hub. To add your **own private** skills, point `SKILLS_REPO_URL` + `SKILLS_REPO_TOKEN` at a repo with a `skills/<name>/` layout (see Env vars above).
 
-### Optional MCP integrations (public services, bring your API key)
+### Optional MCP integrations (public services, bring your own API key)
 
 Add these under `mcp_servers` in `$HERMES_HOME/config.yaml` to extend the agent. None are org-specific; each just needs your own key:
 
 | Service | What it adds | Get a key |
-|4--|---|---|
-| [Composio](https://composio.dev) | One tool router for 1000+ apps (Gmail, Slack, Calendar, CRMsâ€¦ | composio.dev |
+|---|---|---|
+| [Composio](https://composio.dev) | One tool router for 1000+ apps (Gmail, Slack, Calendar, CRMsâ€¦) | composio.dev |
 | [Replicate](https://replicate.com) | Image / video / audio model inference | replicate.com |
 | [AgentMail](https://agentmail.to) | Programmatic email inboxes for agents â€” pairs with the webhook routing here | agentmail.to |
 | [Granola](https://granola.ai) | Meeting notes & transcripts | granola.ai |
 
 ## Rollback
 
-If anything goes sideways, swap the `CMD`([ˆHØÚÙ\™š[H˜XÚÈÈÛÜÚ\›Y\ËÜ˜Z[Ø^K\İ\œÚ
-H\İ™X[HY˜][
-H[™™Y\ŞKˆ]]\Ø\X\œË˜]]™H™Z]š[İ\ˆ™]\›œË‚
+If anything goes sideways, swap the `CMD` in the Dockerfile back to `/opt/hermes/railway-start.sh` (the upstream default) and redeploy. Auth disappears, native behaviour returns.
