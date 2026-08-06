@@ -3,8 +3,8 @@
 #
 # Adapted from Shinyduo/hermes-agent (MIT) by adding auth.
 
-# Pinned to nousresearch/hermes-agent:v2026.6.19 (v0.17.0 "The Reach Release"),
-# published 2026-06-19 (digest below). We pin a versioned RELEASE tag by digest
+# Pinned to nousresearch/hermes-agent:v2026.8.3 (v0.20.0 "The Herald Release"),
+# published 2026-08-03 (digest below). We pin a versioned RELEASE tag by digest
 # rather than the rolling :latest — both for a deterministic pull and because
 # :latest has shipped broken boots before (the 2026-05-28 build crashed in
 # tools/skills_sync.py on `import hermes_constants` and took the service down).
@@ -12,7 +12,7 @@
 # To update later: pick the newest release tag, grab its digest, re-pin below,
 # and verify a clean boot (watch `railway logs` for the [secure-start] lines).
 #   curl -s "https://hub.docker.com/v2/repositories/nousresearch/hermes-agent/tags/?ordering=last_updated&page_size=20" | jq -r '.results[] | "\(.name)\t\(.digest)"'
-FROM nousresearch/hermes-agent@sha256:9f367c7756ef087661a361536a89f438d57a122b958dc23d82d456b1433e6e9e
+FROM nousresearch/hermes-agent@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e
 
 # secure-start.sh boots:
 #   1) hermes gateway (background)
@@ -42,13 +42,9 @@ COPY default-soul.md /opt/hermes/default-soul.md
 # the import (so this Dockerfile keeps working once a fixed image is pinned).
 RUN python3 -c "import os; p='/opt/hermes/tools/skills_sync.py'; (os.path.exists(p) and (lambda L: (lambda m: (L.insert(m[0], L[m[0]][:len(L[m[0]])-len(L[m[0]].lstrip())]+'import sys; sys.path.insert(0, '+chr(34)+'/opt/hermes'+chr(34)+')'), open(p,'w').write(chr(10).join(L)), print('PATCHED skills_sync at line', m[0])) if m else print('skills_sync: import already OK, no patch'))([k for k,l in enumerate(L) if 'from hermes_constants import' in l]))(open(p).read().split(chr(10)))) or print('skills_sync: file absent, no patch')"
 
-# The 2026-05-xx images migrated to s6-overlay v3. The real entrypoint is
-# /init + main-wrapper.sh, which runs cont-init hooks, repopulates the env
-# (with-contenv), activates the venv, and drops to the `hermes` user before
-# exec'ing the CMD. The old `docker/entrypoint.sh` is now a deprecated shim
-# that runs a cont-init hook but NEVER execs the CMD — hardcoding it as the
-# ENTRYPOINT silently kept Hermes from ever starting. So we keep the image's
-# s6 entrypoint and just pass secure-start.sh as the CMD; main-wrapper sees an
-# executable first arg and runs `s6-setuidgid hermes /opt/hermes/secure-start.sh`.
-ENTRYPOINT [ "/init", "/opt/hermes/docker/main-wrapper.sh" ]
+# Keep the upstream entrypoint dispatcher. It uses the full s6 supervision tree
+# when the image owns PID 1 and safely falls back to stage2-hook.sh plus
+# main-wrapper.sh on platforms that inject their own init. We only replace CMD;
+# main-wrapper sees an executable first arg and runs secure-start.sh as hermes.
+ENTRYPOINT [ "/opt/hermes/docker/entrypoint-dispatch.sh" ]
 CMD [ "/opt/hermes/secure-start.sh" ]

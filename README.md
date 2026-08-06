@@ -4,7 +4,7 @@ Minimal Railway deploy template for [Hermes Agent](https://github.com/NousResear
 
 ## What it does
 
-- `FROM nousresearch/hermes-agent:latest` (the official upstream image)
+- Builds from the official `nousresearch/hermes-agent:v2026.8.3` image, pinned by immutable digest
 - Boots `hermes gateway` and `hermes dashboard` (the full native Hermes dashboard - Chat tab, sessions, analytics, all of it)
 - Puts a [Caddy](https://caddyserver.com/) HTTP basic-auth reverse proxy in front so the dashboard is not publicly accessible without credentials
 - All state persists to the Railway volume at `/opt/data`
@@ -93,17 +93,19 @@ The `nousresearch/hermes-agent` image already ships ~90 public skills â€” nothin
 
 Browse the full set in the dashboard, or have the agent run its skill hub. To add your **own private** skills, point `SKILLS_REPO_URL` + `SKILLS_REPO_TOKEN` at a repo with a `skills/<name>/` layout (see Env vars above).
 
-### Optional MCP integrations (public services, bring your own API key)
+### Optional MCP integrations (public services, bring your API key)
 
 Add these under `mcp_servers` in `$HERMES_HOME/config.yaml` to extend the agent. None are org-specific; each just needs your own key:
 
 | Service | What it adds | Get a key |
-|---|---|---|
-| [Composio](https://composio.dev) | One tool router for 1000+ apps (Gmail, Slack, Calendar, CRMsâ€¦) | composio.dev |
+|4--|---|---|
+| [Composio](https://composio.dev) | One tool router for 1000+ apps (Gmail, Slack, Calendar, CRMsâ€¦ | composio.dev |
 | [Replicate](https://replicate.com) | Image / video / audio model inference | replicate.com |
 | [AgentMail](https://agentmail.to) | Programmatic email inboxes for agents â€” pairs with the webhook routing here | agentmail.to |
 | [Granola](https://granola.ai) | Meeting notes & transcripts | granola.ai |
 
 ## Rollback
 
-If anything goes sideways, swap the `CMD` in the Dockerfile back to `/opt/hermes/railway-start.sh` (the upstream default) and redeploy. Auth disappears, native behaviour returns.
+If anything goes sideways, swap the `CMD`([ˆHØÚÙ\™š[H˜XÚÈÈÛÜÚ\›Y\ËÜ˜Z[Ø^K\İ\œÚ
+H\İ™X[HY˜][
+H[™™Y\ŞKˆ]]\Ø\X\œË˜]]™H™Z]š[İ\ˆ™]\›œË‚
