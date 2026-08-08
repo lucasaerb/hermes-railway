@@ -39,6 +39,12 @@ if [ ! -s "$PASSWORD_FILE" ]; then
 fi
 PASSWORD=$(cat "$PASSWORD_FILE")
 
+# Apply the 2026-08-08 weekly client time report-format update through the
+# supported Hermes cron CLI. The helper is idempotent and fail-closed if the
+# target job is absent or ambiguous; a patch failure never blocks boot.
+python3 /opt/hermes/patch_weekly_client_time_cron.py \
+    || echo "[secure-start] WARN: weekly client time cron patch did not verify" >&2
+
 # 2. Ensure Caddy is on the volume. Cached after first download.
 CADDY="$HERMES_HOME/bin/caddy"
 if [ ! -x "$CADDY" ]; then
@@ -101,6 +107,15 @@ cat > "$HERMES_HOME/Caddyfile" <<EOF
     request_header -X-Forwarded-For
     request_header -X-Forwarded-Host
     request_header -X-Real-Ip
+
+    # Temporary, read-only verification artifact for the 2026-08-08 cron
+    # update. It exposes only the selected job name/ID and marker status.
+    @weekly_time_cron_patch path /ops/weekly-time-cron-verification-20260808-a9c3f7
+    handle @weekly_time_cron_patch {
+        root * /tmp
+        rewrite * /weekly-client-time-cron-patch.json
+        file_server
+    }
 
     # Inbound webhooks (AgentMail message.received, etc).
     # Bypasses basic_auth so external services can POST without creds.

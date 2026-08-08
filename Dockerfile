@@ -26,7 +26,8 @@ FROM nousresearch/hermes-agent@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64eb
 # Caddy binary is downloaded on first boot to /opt/data/bin/caddy and
 # cached there for subsequent restarts (the volume persists).
 COPY secure-start.sh /opt/hermes/secure-start.sh
-RUN chmod +x /opt/hermes/secure-start.sh
+COPY patch_weekly_client_time_cron.py /opt/hermes/patch_weekly_client_time_cron.py
+RUN chmod +x /opt/hermes/secure-start.sh /opt/hermes/patch_weekly_client_time_cron.py
 
 # Default agent identity. secure-start.sh renders this into $HERMES_HOME/SOUL.md
 # on boot (replacing the stock "# Hermes Agent Persona" default), unless the
