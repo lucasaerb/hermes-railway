@@ -1,7 +1,7 @@
 #!/bin/bash
-# secure-start.sh — boots Hermes gateway + dashboard behind a Caddy
-# HTTP basic-auth reverse proxy. Caddy listens on $PORT (the public-
-# facing one), dashboard moves to 127.0.0.1:9120 (no longer public).
+# secure-start.sh — prepares Caddy and optional file-access binaries. Runtime
+# services are supervised by s6; this script remains the foreground Caddy CMD.
+# Caddy listens on $PORT and proxies the loopback dashboard at 127.0.0.1:9120.
 #
 # Credentials come from env (Railway): DASHBOARD_USER, DASHBOARD_PASSWORD.
 # If unset, a random 24-char password is generated and printed in the
@@ -285,67 +285,107 @@ fi
 #     /files + /dav - so files the agent creates by default land somewhere it can
 #     immediately hand out a download link for (no more "saved to the wrong
 #     place"). Private/scratch work goes under $HERMES_HOME/internal instead.
-mkdir -p "$HERMES_HOME/share"
+/opt/hermes/.venv/bin/python /opt/hermes/railway_prepare.py
 cd "$HERMES_HOME/share" || cd "$HERMES_HOME" || true
 
-# 5. Start the gateway in the background.
-echo "[secure-start] Starting Hermes gateway (cwd $(pwd))..." >&2
-hermes gateway run &
+# 5. Normal PID-1 containers use s6. Wrapped runtimes cannot run s6-overlay,
+# so provide equivalent direct supervision rather than leaving Caddy on 502.
+if [ "${HERMES_DIRECT_FALLBACK:-0}" = 1 ]; then
+    echo "[secure-start] Starting directly supervised fallback services." >&2
+    fallback_pids=""
 
-# 5b. Re-assert our SOUL.md after the gateway's first-run init. On a FRESH
-#     volume the gateway writes its own default_soul.py persona shortly after
-#     start, clobbering the seed from step 4c. Watch for ~30s and replace any
-#     stock default with our persona; the moment SOUL.md is ours,
-#     soul_is_default() is false and this stops touching it. Backgrounded so it
-#     never delays boot, and harmless once converged.
-if [ -f "$SOUL_TEMPLATE" ]; then
-    ( i=0
-      while [ "$i" -lt 15 ]; do
-          if soul_is_default; then
-              seed_soul && echo "[secure-start] SOUL enforcer: re-applied Hermes persona" >&2
-          fi
-          i=$((i + 1))
-          sleep 2
-      done ) &
-fi
+    fallback_terminate_group() {
+        group_leader="$1"
+        kill -TERM "-$group_leader" 2>/dev/null || true
+        attempts=0
+        while kill -0 "-$group_leader" 2>/dev/null && [ "$attempts" -lt 50 ]; do
+            sleep 0.1
+            attempts=$((attempts + 1))
+        done
+        kill -KILL "-$group_leader" 2>/dev/null || true
+        wait "$group_leader" 2>/dev/null || true
+    }
 
-# 6. Start the dashboard. We bind to 0.0.0.0 + --insecure so the dashboard's
-#    _ws_client_is_allowed() loopback check is bypassed for /api/pty (the
-#    embedded chat WebSocket). With Caddy in front basic-auth-gating all
-#    public traffic and Railway only routing PORT (9119) externally, port
-#    9120 is NEVER reachable from outside the container — the --insecure
-#    flag is misleading; in this context it's still safe.
-#    --tui exposes the in-browser Chat tab (embedded `hermes --tui` via PTY).
-echo "[secure-start] Starting Hermes dashboard on 0.0.0.0:$DASHBOARD_INTERNAL_PORT (container-internal)..." >&2
-hermes dashboard --host 0.0.0.0 --port "$DASHBOARD_INTERNAL_PORT" --no-open --tui --insecure &
+    fallback_supervise() {
+        label="$1"
+        shift
+        child=""
+        trap '[ -z "$child" ] || fallback_terminate_group "$child"; exit 0' TERM INT HUP
+        while :; do
+            setsid "$@" &
+            child=$!
+            if wait "$child"; then status=0; else status=$?; fi
+            fallback_terminate_group "$child"
+            child=""
+            echo "[secure-start] Fallback $label exited ($status); restarting in 2s." >&2
+            sleep 2
+        done
+    }
 
-# 6b. Start file-access services (optional add-ons; Caddy basic-auth gates
-#     them, so filebrowser runs --noauth and rclone runs without auth). Both
-#     bind loopback only and are guarded so a failure never blocks the gateway.
-#
-#     SECURITY: both are rooted at $HERMES_HOME/share, NOT the volume root.
-#     The volume root holds secrets (.env, auth.json, .dashboard-password,
-#     config.yaml, OAuth tokens, skills, cron). Serving only ./share means
-#     those credentials are never reachable (read OR write) over /files or
-#     /dav — an allow-list, so a future secret dropped elsewhere stays private.
-#     Configure your agent (e.g. via its system prompt) to put anything
-#     shareable under ./share.
-SHARE_DIR="$HERMES_HOME/share"
-mkdir -p "$SHARE_DIR" 2>/dev/null || true
-if [ -x "$FILEBROWSER" ]; then
-    echo "[secure-start] Starting filebrowser on 127.0.0.1:9121 (/files, root $SHARE_DIR)..." >&2
-    "$FILEBROWSER" -r "$SHARE_DIR" -a 127.0.0.1 -p 9121 -b /files \
-        -d "$HERMES_HOME/.filebrowser.db" --noauth >/tmp/filebrowser.log 2>&1 &
-fi
-if [ -x "$RCLONE" ]; then
-    echo "[secure-start] Starting rclone WebDAV on 127.0.0.1:9122 (/dav, root $SHARE_DIR)..." >&2
-    "$RCLONE" serve webdav "$SHARE_DIR" --addr 127.0.0.1:9122 --baseurl /dav \
-        >/tmp/rclone.log 2>&1 &
+    fallback_start() {
+        label="$1"
+        shift
+        fallback_supervise "$label" "$@" &
+        fallback_pids="$fallback_pids $!"
+    }
+
+    fallback_start gateway-supervisor \
+        /opt/hermes/.venv/bin/python /opt/hermes/fallback_gateway_supervisor.py
+
+    fallback_start dashboard \
+        /opt/hermes/.venv/bin/hermes dashboard \
+        --host 127.0.0.1 --port "$DASHBOARD_INTERNAL_PORT" --no-open --tui
+    fallback_start process-reaper \
+        /opt/hermes/.venv/bin/python /opt/hermes/process_reaper.py
+    fallback_start filebrowser \
+        "$HERMES_HOME/bin/filebrowser" -r "$HERMES_HOME/share" \
+        -a 127.0.0.1 -p 9121 -b /files \
+        -d "$HERMES_HOME/.filebrowser.db" --noauth
+    fallback_start rclone-webdav \
+        "$HERMES_HOME/bin/rclone" serve webdav "$HERMES_HOME/share" \
+        --addr 127.0.0.1:9122 --baseurl /dav
+
+    fallback_stop() {
+        trap - TERM INT HUP EXIT
+        # fallback_pids contains only shell-generated decimal child PIDs.
+        set -- $fallback_pids
+        [ "$#" -eq 0 ] || kill "$@" 2>/dev/null || true
+        attempts=0
+        while [ "$#" -gt 0 ] && [ "$attempts" -lt 80 ]; do
+            survivors=""
+            for supervisor in "$@"; do
+                if kill -0 "$supervisor" 2>/dev/null; then
+                    survivors="$survivors $supervisor"
+                fi
+            done
+            set -- $survivors
+            [ "$#" -eq 0 ] || sleep 0.1
+            attempts=$((attempts + 1))
+        done
+        [ "$#" -eq 0 ] || kill -KILL "$@" 2>/dev/null || true
+        [ "$#" -eq 0 ] || wait "$@" 2>/dev/null || true
+        fallback_pids=""
+        if [ -n "${fallback_caddy_pid:-}" ]; then
+            fallback_terminate_group "$fallback_caddy_pid"
+            fallback_caddy_pid=""
+        fi
+    }
+    trap fallback_stop TERM INT HUP EXIT
+else
+    echo "[secure-start] Gateway, dashboard, file access, and process reaper are s6-supervised." >&2
 fi
 
 # Give the dashboard a moment to bind before Caddy tries to proxy to it.
 sleep 3
 
-# 7. Foreground: Caddy auth proxy on the public PORT.
+# 7. Caddy auth proxy on the public port.
 echo "[secure-start] Starting Caddy auth proxy on :$PROXY_PORT (user '$USER_NAME')..." >&2
+if [ "${HERMES_DIRECT_FALLBACK:-0}" = 1 ]; then
+    setsid "$CADDY" run --config "$HERMES_HOME/Caddyfile" --adapter caddyfile &
+    fallback_caddy_pid=$!
+    if wait "$fallback_caddy_pid"; then fallback_status=0; else fallback_status=$?; fi
+    fallback_caddy_pid=""
+    fallback_stop
+    exit "$fallback_status"
+fi
 exec "$CADDY" run --config "$HERMES_HOME/Caddyfile" --adapter caddyfile

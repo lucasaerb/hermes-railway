@@ -1,0 +1,8 @@
+#!/command/with-contenv sh
+# Railway's public edge is Caddy. Keep the Hermes dashboard loopback-only and
+# let s6 restart it independently if it crashes.
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+export HERMES_HOME HOME="$HERMES_HOME"
+cd "$HERMES_HOME"
+exec s6-setuidgid hermes /opt/hermes/.venv/bin/hermes dashboard \
+  --host 127.0.0.1 --port 9120 --no-open --tui

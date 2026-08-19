@@ -1,0 +1,29 @@
+#!/bin/sh
+# Preserve upstream s6 behavior when PID 1 is available. In runtimes that wrap
+# the image with another init, run the same safe volume/concurrency preparation
+# and tell secure-start.sh to supervise equivalent direct services.
+set -e
+
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+export HERMES_HOME HOME="$HERMES_HOME"
+# These base-image defaults must move with a custom persistent home.
+export HERMES_WRITE_SAFE_ROOT="$HERMES_HOME"
+export HERMES_LAZY_INSTALL_TARGET="$HERMES_HOME/lazy-packages"
+# This runs before /init and therefore before upstream root cont-init hooks.
+# No Hermes-owned service exists yet, so validation and subsequent root setup
+# cannot be raced by an unprivileged process in this container.
+/opt/hermes/.venv/bin/python /opt/hermes/railway_prepare.py --ensure-home --validate-only
+
+if [ "$$" -eq 1 ]; then
+    rm -f /run/hermes-direct-fallback
+    exec /init /opt/hermes/docker/main-wrapper.sh "$@"
+fi
+
+: > /run/hermes-direct-fallback
+chmod 644 /run/hermes-direct-fallback
+echo "[hermes] WARNING: entrypoint is not PID 1; using direct fallback supervision." >&2
+export PATH="/command:/package/admin/s6/command:${PATH}"
+/opt/hermes/docker/stage2-hook.sh
+sh /etc/cont-init.d/01a-railway-limits
+export HERMES_DIRECT_FALLBACK=1
+exec /opt/hermes/docker/main-wrapper.sh "$@"

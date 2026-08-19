@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+while [ ! -x "$HERMES_HOME/bin/rclone" ]; do sleep 2; done
+exec s6-setuidgid hermes "$HERMES_HOME/bin/rclone" serve webdav "$HERMES_HOME/share" \
+  --addr 127.0.0.1:9122 --baseurl /dav

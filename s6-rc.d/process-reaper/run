@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+export HERMES_HOME HOME="$HERMES_HOME"
+exec s6-setuidgid hermes /opt/hermes/.venv/bin/python /opt/hermes/process_reaper.py

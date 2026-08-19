@@ -5,7 +5,12 @@ Minimal Railway deploy template for [Hermes Agent](https://github.com/NousResear
 ## What it does
 
 - Builds from the official `nousresearch/hermes-agent:v2026.8.3` image, pinned by immutable digest
-- Boots `hermes gateway` and `hermes dashboard` (the full native Hermes dashboard - Chat tab, sessions, analytics, all of it)
+- Runs the root gateway (`gateway-default`), dashboard, file browser, WebDAV, and process reaper as independently supervised s6 services
+- Inventories every root-managed persisted subtree before `/init`, rejects unsafe top-level state files and special files, and makes root ownership repair follow neither symlinks nor hardlinks
+- Uses direct child supervision when a platform wrapper prevents s6-overlay from owning PID 1, dynamically reconciling persisted gateway intent and profile creation or deletion
+- Keeps the dashboard loopback-only at `127.0.0.1:9120`; Caddy is the sole public listener
+- Caps Hermes sessions, delegated workers, Kanban workers, and scheduled-job parallelism for Railway's PID/thread ceiling
+- Reaps stale Hermes-owned preview servers, test runners, and browser daemons after their owner finishes or they exceed the age limit
 - Puts a [Caddy](https://caddyserver.com/) HTTP basic-auth reverse proxy in front so the dashboard is not publicly accessible without credentials
 - All state persists to the Railway volume at `/opt/data`
 
@@ -56,7 +61,11 @@ Everything public goes through **Caddy on `PORT`**. The dashboard, `/files`, and
 | `DASHBOARD_USER` | `admin` | HTTP basic-auth username |
 | `DASHBOARD_PASSWORD` | *(auto-generated)* | If unset, a 24-char random password is generated and printed to logs |
 | `PORT` | `9119` | Public port (Railway sets this automatically) |
-| `HERMES_HOME` | `/opt/data` | Volume mount path |
+| `HERMES_HOME` | `/opt/data` | Volume mount path; startup, wrappers, gateway scripts, write-safe root, and lazy dependencies all derive from it |
+| `HERMES_GATEWAY_BOOTSTRAP_STATE` | `running` | Seeds the supervised `gateway-default` service as running on a fresh volume; persisted operator state wins afterward |
+| `HERMES_PID_SHED_THRESHOLD` | `750` | Reject new delegate/Kanban fan-out and accelerate stale-process cleanup at this PID/thread count, or at 75% of a smaller cgroup limit |
+| `HERMES_PID_ALERT_THRESHOLD` | `850` | Send one Telegram alert at this threshold, or at 85% of a smaller cgroup limit, and record it in `/opt/data/logs/process-reaper.log` |
+| `HERMES_REAPER_MAX_AGE_SECONDS` | `21600` | Maximum age for known Hermes-owned preview/test/browser groups when owner state is unavailable |
 | `SKILLS_REPO_URL` | *(optional)* | HTTPS GitHub URL of a private skills repo to clone at boot (expects a top-level `skills/<name>/` layout) |
 | `SKILLS_REPO_TOKEN` | *(optional)* | GitHub PAT (`contents: read`) used to clone `SKILLS_REPO_URL`. Both must be set to enable. |
 

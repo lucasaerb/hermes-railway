@@ -1,0 +1,6 @@
+#!/command/with-contenv sh
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+while [ ! -x "$HERMES_HOME/bin/filebrowser" ]; do sleep 2; done
+exec s6-setuidgid hermes "$HERMES_HOME/bin/filebrowser" \
+  -r "$HERMES_HOME/share" -a 127.0.0.1 -p 9121 -b /files \
+  -d "$HERMES_HOME/.filebrowser.db" --noauth

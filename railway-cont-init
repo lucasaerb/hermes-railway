@@ -1,0 +1,29 @@
+#!/command/with-contenv sh
+# Runs after upstream 01-hermes-setup and before 02-reconcile-profiles.
+# Validate writable volume paths and apply conservative concurrency before any
+# gateway, dashboard, or add-on service can launch.
+set -eu
+
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+HERMES_BIN="${HERMES_BIN:-/opt/hermes/.venv/bin/hermes}"
+HERMES_PREPARE_PYTHON="${HERMES_PREPARE_PYTHON:-/opt/hermes/.venv/bin/python}"
+HERMES_PREPARE_SCRIPT="${HERMES_PREPARE_SCRIPT:-/opt/hermes/railway_prepare.py}"
+S6_SETUIDGID="${S6_SETUIDGID:-/command/s6-setuidgid}"
+export HERMES_HOME HOME="$HERMES_HOME"
+
+"$HERMES_PREPARE_PYTHON" "$HERMES_PREPARE_SCRIPT"
+
+if [ "$(id -u)" = "$(id -u hermes)" ]; then
+    run_as_hermes() { "$@"; }
+else
+    run_as_hermes() { "$S6_SETUIDGID" hermes "$@"; }
+fi
+
+run_as_hermes "$HERMES_BIN" config set max_concurrent_sessions 2 >/dev/null
+run_as_hermes "$HERMES_BIN" config set delegation.max_concurrent_children 2 >/dev/null
+run_as_hermes "$HERMES_BIN" config set cron.max_parallel_jobs 1 >/dev/null
+run_as_hermes "$HERMES_BIN" config set kanban.max_spawn 1 >/dev/null
+run_as_hermes "$HERMES_BIN" config set kanban.max_in_progress 1 >/dev/null
+run_as_hermes "$HERMES_BIN" config set kanban.auto_decompose_per_tick 1 >/dev/null
+
+echo "[railway-cont-init] safe volume preparation and concurrency limits applied" >&2
