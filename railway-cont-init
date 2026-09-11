@@ -19,7 +19,7 @@ else
     run_as_hermes() { "$S6_SETUIDGID" hermes "$@"; }
 fi
 
-run_as_hermes "$HERMES_BIN" config set max_concurrent_sessions 2 >/dev/null
+run_as_hermes "$HERMES_BIN" config set max_concurrent_sessions 5 >/dev/null
 run_as_hermes "$HERMES_BIN" config set delegation.max_concurrent_children 2 >/dev/null
 run_as_hermes "$HERMES_BIN" config set cron.max_parallel_jobs 1 >/dev/null
 run_as_hermes "$HERMES_BIN" config set kanban.max_spawn 1 >/dev/null

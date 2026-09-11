@@ -45,7 +45,7 @@ class ContInitTests(unittest.TestCase):
             self.assertEqual(
                 calls,
                 [
-                    "config set max_concurrent_sessions 2",
+                    "config set max_concurrent_sessions 5",
                     "config set delegation.max_concurrent_children 2",
                     "config set cron.max_parallel_jobs 1",
                     "config set kanban.max_spawn 1",
