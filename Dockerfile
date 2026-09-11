@@ -54,7 +54,9 @@ COPY fallback_gateway_supervisor.py /opt/hermes/fallback_gateway_supervisor.py
 COPY railway-cont-init /opt/hermes/railway-cont-init
 COPY railway-cont-init /etc/cont-init.d/01a-railway-limits
 COPY entrypoint-dispatch /opt/hermes/docker/entrypoint-dispatch.sh
+COPY entrypoint-dispatch /opt/hermes/entrypoint-dispatch
 COPY dashboard-run /etc/s6-overlay/s6-rc.d/dashboard/run
+COPY dashboard-run /opt/hermes/dashboard-run
 COPY s6-rc.d/ /etc/s6-overlay/s6-rc.d/
 RUN chmod +x \
     /opt/hermes/secure-start.sh \
@@ -87,7 +89,8 @@ RUN cd /opt/hermes && \
     rm -rf railway-derived.Dockerfile \
         test_process_reaper.py test_cont_init.py test_pid_pressure.py \
         test_boot_contract.py test_fallback_supervision.py pid_pressure.py \
-        fallback_lifecycle.py railway-cont-init __pycache__
+        fallback_lifecycle.py railway-cont-init entrypoint-dispatch \
+        dashboard-run __pycache__
 
 # Default agent identity. secure-start.sh renders this into $HERMES_HOME/SOUL.md
 # on boot (replacing the stock "# Hermes Agent Persona" default), unless the
