@@ -58,6 +58,7 @@ COPY entrypoint-dispatch /opt/hermes/entrypoint-dispatch
 COPY dashboard-run /etc/s6-overlay/s6-rc.d/dashboard/run
 COPY dashboard-run /opt/hermes/dashboard-run
 COPY s6-rc.d/ /etc/s6-overlay/s6-rc.d/
+COPY s6-rc.d/ /opt/hermes/s6-rc.d/
 RUN chmod +x \
     /opt/hermes/secure-start.sh \
     /opt/hermes/patch_weekly_client_time_cron.py \
@@ -90,7 +91,7 @@ RUN cd /opt/hermes && \
         test_process_reaper.py test_cont_init.py test_pid_pressure.py \
         test_boot_contract.py test_fallback_supervision.py pid_pressure.py \
         fallback_lifecycle.py railway-cont-init entrypoint-dispatch \
-        dashboard-run __pycache__
+        dashboard-run s6-rc.d __pycache__
 
 # Default agent identity. secure-start.sh renders this into $HERMES_HOME/SOUL.md
 # on boot (replacing the stock "# Hermes Agent Persona" default), unless the
